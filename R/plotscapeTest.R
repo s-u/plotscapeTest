@@ -5,8 +5,11 @@
 #' @import htmlwidgets
 #'
 #' @export
+#' @examples
+#' scene(mtcars) |>
+#'   add_plot_wrapper("scatter", list(x = "wt", y = "mpg")) |>
+#'   add_plot_wrapper("histo", list(x = "disp", y = "_indicator"))
 scene <- function(data, width = NULL, height = NULL, elementId = NULL) {
-
   # forward options using x
   x = list(
     data = data,
@@ -25,10 +28,11 @@ scene <- function(data, width = NULL, height = NULL, elementId = NULL) {
   )
 }
 
+#' @export
 add_plot_wrapper <- function(scene, type, mapping) {
   scene$x$types <- c(scene$x$types, type)
   scene$x$mappings <- append(scene$x$mappings, list(mapping))
-  return(scene)
+  scene
 }
 
 #' Shiny bindings for plotscapeTest
