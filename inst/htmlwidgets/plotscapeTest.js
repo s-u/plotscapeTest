@@ -18,13 +18,10 @@ HTMLWidgets.widget({
         const scene = new PLOTSCAPE.Scene(el, new PLOTSCAPE.DataFrame(x.data))
 
         x.types.forEach((e, i) => {
-          console.log(e)
           const mapping = x.mappings[i]
           const mappingArray = Object.keys(mapping).map(e => [e, mapping[e]])
           scene.addPlotWrapper(e, new PLOTSCAPE.Mapping(...mappingArray))
         })
-
-        console.log(scene)
 
       },
 
