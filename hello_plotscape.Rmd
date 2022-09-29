@@ -1,0 +1,24 @@
+---
+title: "Hello Plotscape"
+author: "Adam Bartonicek"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE, warning=FALSE}
+
+devtools::load_all()
+
+scene(mtcars, 900, 600) |>
+  add_plot_wrapper("scatter", list(x = "wt", y = "mpg")) |>
+  add_plot_wrapper("histo", list(x = "drat", y = "_indicator")) |>
+  add_plot_wrapper("bar", list(x = "am", y = "_indicator")) |>
+  add_plot_wrapper("scatter", list(x = "disp", y = "qsec"))
+
+```
+
+## You can have interactive plots that communicate together in RMarkdown!

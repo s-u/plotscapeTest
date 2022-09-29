@@ -128,24 +128,13 @@ var PLOTSCAPE = (() => {
             }
         }
     });
-    define("globalparameters", ["require", "exports"], function (require, exports) {
-        "use strict";
-        Object.defineProperty(exports, "__esModule", { value: true });
-        exports.globalParameters = void 0;
-        exports.globalParameters = {
-            bgCol: `#f2efde`,
-            reps: {
-                col: [`#cccccc`, `#1b9e77`, `#d95f02`, `#ffffffCC`],
-                strokeCol: [null, null, null, `#000000`],
-                strokeWidth: [null, null, null, 2],
-                radius: [5, 5, 5, 5],
-            },
-        };
-    });
     define("functions", ["require", "exports"], function (require, exports) {
         "use strict";
         Object.defineProperty(exports, "__esModule", { value: true });
         exports.timeExecution = exports.rectOverlap = exports.pointInRect = exports.uniqueRowIds = exports.uniqueRows = exports.arrTranspose = exports.arrEqual = exports.prettyBreaks = exports.accessIndexed = exports.accessUnpeel = exports.accessDeep = exports.throttle = exports.unique = exports.match = exports.which = exports.gatedMultiply = exports.quantile = exports.bin = exports.capitalize = exports.max = exports.min = exports.mean = exports.sum = exports.length = exports.identity = exports.isNumeric = void 0;
+        const deeplyClone = (x) => {
+            return JSON.parse(JSON.stringify(x));
+        };
         const isNumeric = (x) => typeof x[0] === "number";
         exports.isNumeric = isNumeric;
         const identity = (x) => x;
@@ -239,7 +228,7 @@ var PLOTSCAPE = (() => {
         exports.accessUnpeel = accessUnpeel;
         const accessIndexed = (obj, index) => {
             // Deep-clone the object to retain structure
-            const res = JSON.parse(JSON.stringify(obj));
+            const res = deeplyClone(obj);
             Object.keys(obj).forEach((e) => (res[e] = obj[e][index]));
             return res;
         };
@@ -509,12 +498,33 @@ var PLOTSCAPE = (() => {
         }
         exports.DragHandler = DragHandler;
     });
+    define("globalparameters", ["require", "exports"], function (require, exports) {
+        "use strict";
+        Object.defineProperty(exports, "__esModule", { value: true });
+        exports.globalParameters = void 0;
+        exports.globalParameters = {
+            bgCol: `#f2efde`,
+            reps: {
+                col: [`#cccccc`, `#1b9e77`, `#d95f02`, `#ffffffCC`],
+                strokeCol: [null, null, null, `#000000`],
+                strokeWidth: [null, null, null, 1],
+                radius: [5, 5, 5, 5],
+            },
+        };
+    });
     define("plot/GraphicLayer", ["require", "exports", "globalparameters"], function (require, exports, globalparameters_js_1) {
         "use strict";
         Object.defineProperty(exports, "__esModule", { value: true });
         exports.GraphicLayer = void 0;
         class GraphicLayer {
-            constructor(width, height) {
+            constructor(globals) {
+                this.resize = () => {
+                    this.canvas.style.width = `${this.width}px`;
+                    this.canvas.style.height = `${this.height}px`;
+                    this.canvas.width = Math.ceil(this.width * this.scaleFactor);
+                    this.canvas.height = Math.ceil(this.height * this.scaleFactor);
+                    this.context.scale(this.scaleFactor, this.scaleFactor);
+                };
                 this.dropMissing = (...vectors) => {
                     let missingIndices = [...vectors].flatMap((vector) => vector
                         .flatMap((value, index) => (value === null ? index : []))
@@ -627,7 +637,6 @@ var PLOTSCAPE = (() => {
                 this.drawText = (x, y, labels, size = 20, rotate) => {
                     const context = this.context;
                     context.save();
-                    context.textAlign = "center";
                     context.font = `${size}px Times New Roman`;
                     x.forEach((e, i) => {
                         context.translate(e, y[i]);
@@ -657,13 +666,20 @@ var PLOTSCAPE = (() => {
                     // );
                     context.restore();
                 };
+                this.globals = globals;
                 this.canvas = document.createElement("canvas");
                 this.context = this.canvas.getContext("2d");
-                this.width = width;
-                this.height = height;
                 this.backgroundColour = globalparameters_js_1.globalParameters.bgCol;
-                this.canvas.width = width;
-                this.canvas.height = height;
+                this.resize();
+            }
+            get width() {
+                return this.globals.plotWidth;
+            }
+            get height() {
+                return this.globals.plotHeight;
+            }
+            get scaleFactor() {
+                return this.globals.scaleFactor;
             }
         }
         exports.GraphicLayer = GraphicLayer;
@@ -941,7 +957,7 @@ var PLOTSCAPE = (() => {
                     context.drawBarsV(x, y, y0, pars);
                 };
                 this.drawHighlight = (context) => {
-                    dtstr.validMembershipArray.forEach((e) => {
+                    dtstr.highlightMembershipArray.forEach((e) => {
                         const [x, y] = this.getMappings(e);
                         // console.log(e);
                         // console.log(y);
@@ -1006,7 +1022,7 @@ var PLOTSCAPE = (() => {
                     context.drawPoints(x, y, pars);
                 };
                 this.drawHighlight = (context) => {
-                    dtstr.validMembershipArray.forEach((e) => {
+                    dtstr.highlightMembershipArray.forEach((e) => {
                         const [x, y, size] = this.getMappings(e);
                         if (!(x.length > 0))
                             return;
@@ -1056,7 +1072,7 @@ var PLOTSCAPE = (() => {
                     context.drawRectsHW(x, y, size, size, pars);
                 };
                 this.drawHighlight = (context) => {
-                    dtstr.validMembershipArray.forEach((e) => {
+                    dtstr.highlightMembershipArray.forEach((e) => {
                         const [x, y, size] = this.getMappings(e);
                         if (!x)
                             return;
@@ -1090,6 +1106,10 @@ var PLOTSCAPE = (() => {
         exports.Scale = void 0;
         class Scale {
             constructor(length, direction = 1, expand = 0.1) {
+                this.setLength = (length) => {
+                    this.lengthOriginal = length;
+                    this.offsetOriginal = this.direction === -1 ? length : 0;
+                };
                 this.registerData = (data) => {
                     this.data = data;
                     return this;
@@ -1107,10 +1127,17 @@ var PLOTSCAPE = (() => {
                         : units.map((e) => e / length);
                 };
                 this.dataToPlot = (data) => { };
-                this.length = length;
+                this.lengthOriginal = length;
+                this.offsetOriginal = this.direction === -1 ? length : 0;
+                this.span = 1;
                 this.direction = direction;
                 this.expand = expand;
-                this.offset = this.direction === -1 ? this.length : 0;
+            }
+            get length() {
+                return this.lengthOriginal * this.span;
+            }
+            get offset() {
+                return this.offsetOriginal;
             }
         }
         exports.Scale = Scale;
@@ -1249,10 +1276,15 @@ var PLOTSCAPE = (() => {
                     return this.unitsToPct(units);
                 };
                 this.margins = margins;
+                this.span = 1 - margins.lower - margins.upper;
                 // Shift & shrink the scale by the plot margins
-                this.offset =
-                    this.offset + this.direction * this.length * this.margins.lower;
-                this.length = (1 - this.margins.lower - this.margins.upper) * this.length;
+                // this.offset =
+                //   this.offset + this.direction * this.length * this.margins.lower;
+                // this.length = (1 - this.margins.lower - this.margins.upper) * this.length;
+            }
+            get offset() {
+                return (this.offsetOriginal +
+                    this.direction * this.lengthOriginal * this.margins.lower);
             }
             get plotMin() {
                 return this.pctToUnits(0);
@@ -1283,10 +1315,15 @@ var PLOTSCAPE = (() => {
                     return this.unitsToPct(units);
                 };
                 this.margins = margins;
+                this.span = 1 - margins.lower - margins.upper;
                 // Shift & shrink the scale by the plot margins
-                this.offset =
-                    this.offset + this.direction * this.length * this.margins.lower;
-                this.length = (1 - this.margins.lower - this.margins.upper) * this.length;
+                // this.offset =
+                //   this.offset + this.direction * this.length * this.margins.lower;
+                // this.length = (1 - this.margins.lower - this.margins.upper) * this.length;
+            }
+            get offset() {
+                return (this.offsetOriginal +
+                    this.direction * this.lengthOriginal * this.margins.lower);
             }
             get plotMin() {
                 return this.pctToUnits(0);
@@ -1358,20 +1395,22 @@ var PLOTSCAPE = (() => {
                     return this.labels.map((label) => context.context.measureText(label));
                 };
                 this.draw = (context) => {
-                    const xMargins = this.scales.x.margins;
-                    const yMargins = this.scales.y.margins;
-                    const labelWidths = this.getLabelMetrics(context).map((e) => e.width);
-                    // Hacky solution since older versions of JavaScript don't
-                    // support TextMetrics.actualBoundingBoxAscent
-                    const labelHeights = this.getLabelMetrics(context).map((e) => context.context.measureText("M").width);
-                    const intercepts = Array.from(Array(this.breaks.length), (e) => this.scales[this.other].plotMin);
-                    const x = this.along === "x"
-                        ? this.breaks
-                        : intercepts.map((e, i) => -5 + e - labelWidths[i]);
-                    const y = this.along === "x"
-                        ? intercepts.map((e, i) => 5 + e + 2 * labelHeights[i])
-                        : this.breaks;
-                    context.drawText(x, y, this.labels);
+                    const { scales, along, other, breaks } = this;
+                    const size = Math.min(...[along, other].map((e) => 0.3 * scales[e].margins.lower * scales[e].length));
+                    const intercepts = Array.from(Array(breaks.length), (e) => scales[other].plotMin + (along === "x" ? 5 : -5));
+                    const coords = { x: null, y: null };
+                    coords[along] = breaks;
+                    coords[other] = intercepts;
+                    if (along === "x") {
+                        context.context.textBaseline = "top";
+                        context.context.textAlign = "center";
+                    }
+                    if (along === "y") {
+                        context.context.textBaseline = "middle";
+                        context.context.textAlign = "right";
+                    }
+                    //    context.context.textAlign = along === "x" ? "center" : "right";
+                    context.drawText(coords.x, coords.y, this.labels, size);
                 };
                 this.drawBase = (context) => {
                     this.draw(context);
@@ -1408,16 +1447,20 @@ var PLOTSCAPE = (() => {
                 this.draw = (context) => {
                     if (this.label === "_indicator")
                         return;
-                    const labelWidth = this.getLabelMetrics(context).width;
-                    const labelHeight = this.getLabelMetrics(context).actualBoundingBoxAscent;
-                    const x = this.along === "x"
-                        ? this.scales.x.pctToPlot(0.5)
-                        : this.scales.x.pctToPlot(0) - 50;
-                    const y = this.along === "x"
-                        ? this.scales.y.pctToPlot(0) + 50
-                        : this.scales.y.pctToPlot(0.5);
+                    const { scales, along, other } = this;
+                    const size = Math.min(...[along, other].map((e) => 0.4 * scales[e].margins.lower * scales[e].length));
+                    const coords = { x: null, y: null };
+                    coords[along] = scales[along].pctToPlot(0.5);
+                    coords[other] =
+                        scales[other].pctToPlot(0) +
+                            (along === "x" ? 1 : -1) *
+                                0.85 *
+                                scales[other].margins.lower *
+                                scales[other].length;
                     const rot = this.along === "x" ? 0 : 270;
-                    context.drawText([x], [y], [this.label], 30, rot);
+                    context.context.textAlign = "center";
+                    context.context.textBaseline = "middle";
+                    context.drawText([coords.x], [coords.y], [this.label], size, rot);
                 };
                 this.drawBase = (context) => {
                     this.draw(context);
@@ -1518,12 +1561,8 @@ var PLOTSCAPE = (() => {
                     const graphicLayers = ["graphicBase", "graphicUser", "graphicHighlight"];
                     this.graphicDiv.appendChild(this.graphicContainer);
                     this.graphicContainer.setAttribute("class", "graphicContainer");
-                    this.divWidth = parseInt(getComputedStyle(this.graphicDiv).width, 10);
-                    this.divHeight = parseInt(getComputedStyle(this.graphicDiv).height, 10);
-                    this.width = parseInt(getComputedStyle(this.graphicContainer).width, 10);
-                    this.height = parseInt(getComputedStyle(this.graphicContainer).height, 10);
                     graphicLayers.forEach((e) => {
-                        this[e] = new GraphicLayer_js_1.GraphicLayer(this.width, this.height);
+                        this[e] = new GraphicLayer_js_1.GraphicLayer(this.globals);
                         this.graphicContainer.appendChild(this[e].canvas);
                     });
                     this.graphicBase.drawBackground();
@@ -1532,6 +1571,12 @@ var PLOTSCAPE = (() => {
                 this.graphicDiv = element;
                 this.graphicContainer = document.createElement("div");
                 this.initialize();
+            }
+            get width() {
+                return this.globals.plotWidth;
+            }
+            get height() {
+                return this.globals.plotHeight;
             }
         }
         exports.GraphicStack = GraphicStack;
@@ -1543,6 +1588,14 @@ var PLOTSCAPE = (() => {
         class Plot extends GraphicStack_js_1.GraphicStack {
             constructor(id, element, mapping, globals) {
                 super(element, globals);
+                this.resize = () => {
+                    const graphicLayers = ["graphicBase", "graphicUser", "graphicHighlight"];
+                    this.scales.x.setLength(this.width);
+                    this.scales.y.setLength(this.height);
+                    this.graphicContainer.style.width = `${this.width}px`;
+                    this.graphicContainer.style.height = `${this.height}px`;
+                    graphicLayers.forEach((e) => this[e].resize());
+                };
                 this.activate = () => {
                     this.handlers.state.deactivateAll();
                     this.handlers.state.activate(this.id);
@@ -1758,7 +1811,7 @@ var PLOTSCAPE = (() => {
     define("datastructures", ["require", "exports"], function (require, exports) {
         "use strict";
         Object.defineProperty(exports, "__esModule", { value: true });
-        exports.plotTypeArray = exports.validMembershipArray = exports.baseMembershipArray = void 0;
+        exports.plotTypeArray = exports.highlightMembershipArray = exports.validMembershipArray = exports.baseMembershipArray = void 0;
         const baseMembershipArray = [1, 2, 3];
         exports.baseMembershipArray = baseMembershipArray;
         const validMembershipArray = [
@@ -1767,6 +1820,8 @@ var PLOTSCAPE = (() => {
             128,
         ];
         exports.validMembershipArray = validMembershipArray;
+        const highlightMembershipArray = validMembershipArray.filter((e) => e !== 1);
+        exports.highlightMembershipArray = highlightMembershipArray;
         const plotTypeArray = ["scatter", "bubble", "bar", "histo", "square"];
         exports.plotTypeArray = plotTypeArray;
     });
@@ -1937,15 +1992,17 @@ var PLOTSCAPE = (() => {
                     const plotTypeIndex = dtstr.plotTypeArray.findIndex((e) => e === plotType);
                     this.nPlotsOfType[plotTypeIndex]++;
                     const plotId = `${plotType}${this.nPlotsOfType[plotTypeIndex]}`;
-                    if (plotIds.length > 0) {
-                        console.log("this is being triggered");
-                        plotIds.forEach((e) => plots[e].drawRedraw());
-                    }
                     this.plots[plotId] = new PlotProxy(plotType, plotId, element, mapping, globals);
                     plotIds.push(plotId);
                     globals.handlers.state.plotIds.push(plotId);
                     globals.handlers.state.plotsActive.push(false);
                     globals.handlers.state.plotContainers.push(this.plots[plotId].graphicContainer);
+                    if (plotIds.length > 1) {
+                        plotIds.forEach((e) => {
+                            plots[e].resize();
+                            plots[e].drawRedraw();
+                        });
+                    }
                     return this;
                 };
                 this.element = element;
@@ -1955,13 +2012,24 @@ var PLOTSCAPE = (() => {
                 this.plotIds = [];
                 this.globals = {
                     nPlots: 0,
+                    scaleFactor: 3,
                     data: data,
+                    sceneWidth: parseInt(getComputedStyle(element).width, 10),
+                    sceneHeight: parseInt(getComputedStyle(element).height, 10),
+                    get plotWidth() {
+                        return ((0.85 * this.sceneWidth) /
+                            Math.ceil(this.nPlots / Math.floor(Math.sqrt(this.nPlots))));
+                    },
+                    get plotHeight() {
+                        return (0.85 * this.sceneHeight) / Math.floor(Math.sqrt(this.nPlots));
+                    },
                     handlers: {
                         marker: new hndl.MarkerHandler(this.nObs),
                         keypress: new hndl.KeypressHandler(),
                         state: new hndl.StateHandler(),
                     },
                 };
+                element.classList.add("graphicDiv");
                 this.globals.handlers.state.keypressHandler =
                     this.globals.handlers.keypress;
                 // Inject css
@@ -1978,6 +2046,10 @@ var PLOTSCAPE = (() => {
                 helpButton.classList.add("buttonHelp");
                 helpPanel.innerText = "Hello, welcome to Plotscape";
                 helpPanel.classList.add("helpPanel");
+                const helpButtonDim = Math.min(this.globals.sceneWidth, this.globals.sceneHeight) * 0.05;
+                helpButton.style.width = `${helpButtonDim}px`;
+                helpButton.style.height = `${helpButtonDim}px`;
+                helpButton.style.fontSize = `${0.5 * helpButtonDim}px`;
                 element.appendChild(helpPanel);
                 element.appendChild(helpButton);
                 helpButton.addEventListener("click", (event) => {
@@ -2008,6 +2080,7 @@ var PLOTSCAPE = (() => {
         __exportStar(DataFrame_js_1, exports);
         __exportStar(Mapping_js_1, exports);
         __exportStar(functions_js_1, exports);
+        1;
     });
     
     'marker:resolver';
